@@ -36,4 +36,26 @@ git remote set-url origin git@github.com:gbpoole/cas-eresearch-slack.git
 
 # Install requirements
 
-* Install Docker with: ./cas-eresearch-slack/scripts/install_Docker_on_Ubuntu.sh
+* Install Docker with: sudo ./cas-eresearch-slack/scripts/install_Docker_on_Ubuntu.sh (enter y-and-return when prompted)
+* Install Python with: sudo ./cas-eresearch-slack/scripts/install_Python_on_Ubuntu.sh (enter y-and-return when prompted)
+* install the OpenStack client: sudo ./cas-eresearch-slack/scripts/install_OpenStack_client.sh
+
+# Set-up DNS name
+
+* Install Open Stack CLI client:
+	* Obtain Open Stack rc file from the dashboard: from the top bar, click on email and then OpenStack rc file download
+	* scp rc file to the VM: scp rc-file-name.sh ubuntu@IP_ADDRESS:/home/ubuntu/
+	* source the file on the VM: . rc-file-name.sh (enter project password when asked)
+* Execute the following with the client:
+	* check that your project has the default zone as follows: $ openstack zone list
+	* add a DNS record for your instance to the zone as follows: $ openstack recordset create <project>.cloud.edu.au. <instance name> --type A --record <instance IP addr>
+		* If a "Duplicate RecordSet" error is thrown, then you need to delete the old one first: openstack recordset delete <project>.cloud.edu.au.  <instance name>.<project>.cloud.edu.au.
+		* then, retry the openstack recordset create command above
+	
+	
+
+			
+
+
+
+
