@@ -1,8 +1,6 @@
-# Installation
+# CAS-eResearch Slack Application
 
-## Nectar VM
-
-### VM Config
+## Installation on Nectar VM
 
 The following instructions have been validated with a Nectar VM configured as follows:
 
@@ -15,6 +13,8 @@ ALLOW IPv4 80/tcp from 0.0.0.0/0
 ALLOW IPv6 to ::/0
 ALLOW IPv4 to 0.0.0.0/0
 ALLOW IPv4 8080/tcp from 0.0.0.0/0
+
+### VM Config
 
 In what follows, you will need the following, once the VM is instantiated:
 
@@ -38,9 +38,11 @@ git remote set-url origin git@github.com:gbpoole/cas-eresearch-slack.git
 
 * Install Docker with: sudo ./cas-eresearch-slack/scripts/install_Docker_on_Ubuntu.sh (enter y-and-return when prompted)
 * Install Python with: sudo ./cas-eresearch-slack/scripts/install_Python_on_Ubuntu.sh (enter y-and-return when prompted)
-* install the OpenStack client: sudo ./cas-eresearch-slack/scripts/install_OpenStack_client.sh
+* Install the OpenStack client: sudo ./cas-eresearch-slack/scripts/install_OpenStack_client.sh
+* Install certbot: sudo ./cas-eresearch-slack/scripts/install_certbot_on_Ubuntu.sh (enter y-and-return when prompted)
+* Install Nginx: sudo ./cas-eresearch-slack/scripts/install_Nginx_on_Ubuntu.sh (enter y-and-return when prompted)
 
-# Set-up DNS name
+### Set-up DNS name
 
 * Install Open Stack CLI client:
 	* Obtain Open Stack rc file from the dashboard: from the top bar, click on email and then OpenStack rc file download
@@ -51,11 +53,44 @@ git remote set-url origin git@github.com:gbpoole/cas-eresearch-slack.git
 	* add a DNS record for your instance to the zone as follows: $ openstack recordset create <project>.cloud.edu.au. <instance name> --type A --record <instance IP addr>
 		* If a "Duplicate RecordSet" error is thrown, then you need to delete the old one first: openstack recordset delete <project>.cloud.edu.au.  <instance name>.<project>.cloud.edu.au.
 		* then, retry the openstack recordset create command above
-	
-	
 
-			
+### Set-up Nginx
+
+* Verify that Nginx registered itself as a service with ufw when it installed: sudo ufw app list
+	* You should see something like:
+
+Available applications:
+  Nginx Full
+  Nginx HTTP
+  Nginx HTTPS
+  OpenSSH
+
+* Verify that Nginx was started at the install: systemctl status nginx
+	* You should see something like:
+
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2022-08-03 04:35:19 UTC; 3min 17s ago
+       Docs: man:nginx(8)
+    Process: 44621 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 44631 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 44632 (nginx)
+      Tasks: 2 (limit: 1144)
+     Memory: 5.1M
+     CGroup: /system.slice/nginx.service
+             ├─44632 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+             └─44633 nginx: worker process
+
+Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Starting A high performance web server and a reverse proxy server...
+Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Started A high performance web server and a reverse proxy server.
 
 
 
 
+### Set-up a "Let's Encrypt" Certificate
+
+
+
+### Run the app
+
+* Use docker-compose to start the app (from the repo directory): sudo docker-compose up -d
