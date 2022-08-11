@@ -41,6 +41,7 @@ git remote set-url origin git@github.com:gbpoole/cas-eresearch-slack.git
 * Install the OpenStack client: sudo ./cas-eresearch-slack/scripts/install_OpenStack_client.sh
 * Install certbot: sudo ./cas-eresearch-slack/scripts/install_certbot_on_Ubuntu.sh (enter y-and-return when prompted)
 * Install Nginx: sudo ./cas-eresearch-slack/scripts/install_Nginx_on_Ubuntu.sh (enter y-and-return when prompted)
+* Install Poetry with: sudo ./cas-eresearch-slack/scripts/install_Poetry.sh
 
 ### Set-up DNS name
 
@@ -93,4 +94,8 @@ Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Started A high performance web s
 
 ### Run the app
 
+* Install Poetry
+* Create a venv (if not done already): sudo ./scripts/create_venv.sh
+* Source venv: source venv/bin/activate
+* Install the app with: poetry install
 * Use docker-compose to start the app (from the repo directory): sudo docker-compose up -d

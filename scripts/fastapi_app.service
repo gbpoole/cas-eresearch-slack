@@ -1,0 +1,12 @@
+[Unit]
+Description=Gunicorn Daemon for CAS-eResearch-slack FastAPI Application
+After=network.target
+
+[Service]
+User=demo
+Group=www-data
+WorkingDirectory=
+ExecStart=/var/www/app/cas-eresearch-slack/venv/bin/gunicorn -c scripts/gunicorn_conf.py app:app
+
+[Install]
+WantedBy=multi-user.target
