@@ -85,6 +85,13 @@ Available applications:
 Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Starting A high performance web server and a reverse proxy server...
 Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Started A high performance web server and a reverse proxy server.
 
+* Copy Nginx config files into place: sudo cp scripts/nginx.config /etc/nginx/sites-available/cas-eresearch-slack
+* Make a link to this file: sudo ln -s /etc/nginx/sites-available/cas-eresearch-slack /etc/nginx/sites-enabled/
+* remove the default site (note, a copy will remain at rm /etc/nginx/sites-available/default if you need it): sudo rm /etc/nginx/sites-enabled/default
+* Restart Nginx: sudo systemctl restart nginx.service
+* Start site: gunicorn -b 0.0.0.0:8080 -w 4 -k uvicorn.workers.UvicornWorker app.main:app
+
+
 
 
 
@@ -94,8 +101,8 @@ Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Started A high performance web s
 
 ### Run the app
 
-* Install Poetry
-* Create a venv (if not done already): sudo ./scripts/create_venv.sh
+* Install Poetry.  Add to path: export PATH="/home/ubuntu/.local/bin:$PATH"
+* Create a venv (if not done already): ./scripts/create_venv.sh
 * Source venv: source venv/bin/activate
 * Install the app with: poetry install
 * Use docker-compose to start the app (from the repo directory): sudo docker-compose up -d
