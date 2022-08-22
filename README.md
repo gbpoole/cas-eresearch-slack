@@ -91,13 +91,18 @@ Aug 03 04:35:19 cas-eresearch-slack systemd[1]: Started A high performance web s
 * Restart Nginx: sudo systemctl restart nginx.service
 * Start site: gunicorn -b 0.0.0.0:8080 -w 4 -k uvicorn.workers.UvicornWorker app.main:app
 
-
-
-
-
 ### Set-up a "Let's Encrypt" Certificate
 
+** Certbot only works with Python 3.5 to 3.8, so watch-out for the install of Python 3.10 above! **
+** The following commands, for switching python3 versions might be handy: sudo update-alternatives  --set python3 /usr/bin/python3.10
+ and sudo update-alternatives  --set python3 /usr/bin/python3.8 **
 
+Create a new venv and run certbot from there:
+
+python3 -m venv myenv
+. ./myenv/bin/activate
+pip3 install certbot certbot-nginx
+sudo myenv/bin/certbot --nginx -d cas-eresearch-slack.adacs-gpoole.cloud.edu.au
 
 ### Run the app
 
