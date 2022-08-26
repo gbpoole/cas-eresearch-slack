@@ -1,15 +1,12 @@
-# project/app/config.py
-
-
 import logging
 import os
 from functools import lru_cache
-
 from pydantic import BaseSettings
 
 
-log = logging.getLogger("uvicorn")
-
+CODA_API_TOKEN = os.environ['CODA_TOKEN']
+CODA_DOC_ID = "3zs35nY4oB"
+CODA_HEADERS = {'Authorization': f"Bearer {CODA_API_TOKEN}"}
 
 class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "dev")
