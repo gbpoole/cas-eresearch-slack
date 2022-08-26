@@ -1,7 +1,7 @@
 # project/app/main.py
 
 from fastapi import FastAPI, Depends
-from app.config import get_settings, Settings
+from app.config import get_settings, Settings, web_client
 from slackers.server import router, commands
 import logging
 
@@ -21,7 +21,11 @@ async def pong(settings: Settings = Depends(get_settings)):
 
 @commands.on("time")  # responds to "/time"  
 async def handle_command(payload):
-    pass
+    channel = payload["channel_id"]
+    user_id = payload["user_id"]
+    web_client.chat_postMessage(channel=channel, user=user_id, text=payload['text'])
+
+    return
 
 @commands.on('error')
 def log_error(exc):

@@ -1,5 +1,6 @@
 import logging
 import os
+import slack_sdk as slack
 from functools import lru_cache
 from pydantic import BaseSettings
 
@@ -17,3 +18,6 @@ class Settings(BaseSettings):
 def get_settings() -> BaseSettings:
     log.info("Loading config settings from the environment...")
     return Settings()
+
+SLACK_BOT_TOKEN = os.environ['SLACK_BOT_TOKEN']
+web_client = slack.WebClient(token=SLACK_BOT_TOKEN)
