@@ -24,7 +24,7 @@ async def handle_command(payload, slack = Depends(init_slack)):
     channel = payload["channel_id"]
     user_id = payload["user_id"]
 
-    slack.web_client.chat_postMessage(channel=channel, user=user_id, text=payload['text'])
+    slack.client.chat_postMessage(channel=channel, user=user_id, text=payload['text'])
 
     return
 

@@ -1,6 +1,7 @@
 import logging
 import os
 import slack_sdk as slack
+from codaio import Coda, Document
 import requests
 from functools import lru_cache
 from pydantic import BaseSettings, ValidationError
@@ -17,12 +18,30 @@ class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "dev")
     testing: bool = os.getenv("TESTING", 0)
 
-class SlackClient(BaseSettings):
+class SlackClient(object):
 
     def __init__(self,settings: Settings):
 
-        web_client = slack.WebClient(token=settings.SLACK_BOT_TOKEN)
+        client = slack.WebClient(token=settings.SLACK_BOT_TOKEN)
 
+class CodaClient(object):
+
+    def __init__(self,settings: Settings):
+
+        self.client = Coda(settings.CODA_API_TOKEN)
+        self.doc    = Document(settings.CODA_DOC_ID, coda=self.client)
+        self.settings = settings
+
+    def get_rows(self, table):
+
+        results = []
+        for row in self.client.list_rows(self.doc.id, table.id, use_column_names=True)['items']:
+            result = {}
+            for key, value in row['values'].items():
+                result[key]=value
+            results.append(result)
+
+        return results
 
 @lru_cache()
 def get_settings() -> BaseSettings:
@@ -33,3 +52,8 @@ def get_settings() -> BaseSettings:
 def init_slack(settings: Settings = Depends(get_settings)) -> object:
     log.info("Initialising Slack client...")
     return SlackClient(settings)
+
+@lru_cache()
+def init_coda(settings: Settings = Depends(get_settings)) -> object:
+    log.info("Initialising Coda client...")
+    return CodaClient(settings)

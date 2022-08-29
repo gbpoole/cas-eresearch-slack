@@ -11,6 +11,9 @@ fastapi = "^0.78.0"
 uvicorn = "^0.18.2"
 requests = "^2.28.1"
 slackers = "^1.0.2"
+pydantic = "^1.9.2"
+slack-sdk = "^3.18.1"
+codaio = "^0.6.10"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.2"
