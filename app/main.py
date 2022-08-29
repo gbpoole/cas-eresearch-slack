@@ -1,7 +1,7 @@
 # project/app/main.py
 
 from fastapi import FastAPI, Depends
-from app.config import get_settings, Settings, web_client
+from app.config import Settings, get_settings, init_slack, init_coda
 from slackers.server import router, commands
 import logging
 
@@ -20,14 +20,14 @@ async def pong(settings: Settings = Depends(get_settings)):
     }
 
 @commands.on("time")  # responds to "/time"  
-async def handle_command(payload):
+async def handle_command(payload, slack = Depends(init_slack)):
     channel = payload["channel_id"]
     user_id = payload["user_id"]
-    web_client.chat_postMessage(channel=channel, user=user_id, text=payload['text'])
+
+    slack.web_client.chat_postMessage(channel=channel, user=user_id, text=payload['text'])
 
     return
 
 @commands.on('error')
 def log_error(exc):
     log.error(str(exc))
-
