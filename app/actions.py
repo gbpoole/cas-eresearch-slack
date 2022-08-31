@@ -1,7 +1,7 @@
-import logging
+from logging import getLogger
 from slackers.hooks import actions
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 # # Listening for the action type.
 # @actions.on("block_actions")

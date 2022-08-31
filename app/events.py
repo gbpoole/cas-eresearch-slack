@@ -1,4 +1,4 @@
-import logging
+from logging import getLogger
 from slackers.hooks import events
 
 log = logging.getLogger(__name__)
