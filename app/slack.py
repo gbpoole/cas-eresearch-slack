@@ -2,17 +2,18 @@ from logging import getLogger
 from slack_sdk import WebClient
 from functools import lru_cache
 from fastapi import Depends
-import config
+import app.config
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class SlackClient(object):
 
-    def __init__(self,settings: config.Settings):
+    def __init__(self, settings):
 
-        client = WebClient(token=settings.SLACK_BOT_TOKEN)
+        self.client = WebClient(token=settings.SLACK_BOT_TOKEN)
 
-def init_client(settings: config.Settings = Depends(config.get_settings)) -> object:
+@lru_cache
+def get_client(settings: app.config.Settings) -> SlackClient:
     log.info("Initialising Slack client...")
     return SlackClient(settings)

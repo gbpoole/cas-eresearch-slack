@@ -1,7 +1,6 @@
-from fastapi import Depends, commands
+from fastapi import Depends
 from logging import getLogger
-import slack
-import coda
+from slackers.server import commands
 import app.config
 
 log = getLogger(__name__)

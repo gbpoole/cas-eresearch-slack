@@ -2,31 +2,30 @@ from logging import getLogger
 from codaio import Coda, Document, Cell
 from functools import lru_cache
 from fastapi import Depends
-import config
+import app.config
 
 log = getLogger(__name__)
 
 
 class CodaClient(object):
 
-    def __init__(self,settings: config.Settings):
+    def __init__(self, settings):
 
-        self.client = Coda(settings.CODA_API_TOKEN)
-        self.doc    = Document(settings.CODA_DOC_ID, coda=self.client)
-        self.settings = settings
+    	self.client = Coda(settings.CODA_API_TOKEN)
+    	self.doc    = Document(settings.CODA_DOC_ID, coda=self.client)
 
-        # Fetch the metadata for the tables that we will need
-        table_alias_list = {
-            'People':            'people',
-            'Slack Users':       'slack',
-            'Projects':          'projects',
-            'Timesheet Entries': 'timesheet',
-        }
-        self.tables = {}
-        tables = self.doc.list_tables()
-        for table in tables:
-            if table.name in table_alias_list.keys():
-                self.tables[table_alias_list[table.name]]=table
+    	# Fetch the metadata for the tables that we will need
+    	table_aliases = {
+    	    'People':            'people',
+    	    'Slack Users':       'slack',
+    	    'Projects':          'projects',
+    	    'Timesheet Entries': 'timesheet',
+    	}
+    	self.tables = {}
+    	tables = self.doc.list_tables()
+    	for table in tables:
+    	    if table.name in table_aliases.keys():
+    	        self.tables[table_aliases[table.name]]=table
 
     def get_rows(self, table_alias, query):
 
@@ -53,6 +52,6 @@ class CodaClient(object):
         return
 
 @lru_cache()
-def init_client(settings: config.Settings = Depends(config.get_settings)) -> object:
+def get_client(settings: app.config.Settings) -> CodaClient:
     log.info("Initialising Coda client...")
     return CodaClient(settings)
