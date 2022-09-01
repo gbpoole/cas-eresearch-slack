@@ -13,7 +13,10 @@ class SlackClient(object):
 
         self.client = WebClient(token=settings.SLACK_BOT_TOKEN)
 
-    def message(self, payload, message, ephemeral=True):
+    def message(self, payload, message, ephemeral=True, code=False):
+
+        if code:
+            message = "```"+message.replace("`","'")+"```"
 
         if ephemeral:
             self.client.chat_postEphemeral(channel=payload["channel_id"], user=payload["user_id"] , text= message)

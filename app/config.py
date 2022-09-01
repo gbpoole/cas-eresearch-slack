@@ -16,9 +16,8 @@ class Settings(object):
     if environment=="dev":
         logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
-    CODA_API_TOKEN: str = os.environ['CODA_TOKEN']
-    CODA_DOC_ID: str = "3zs35nY4oB"
-    CODA_HEADERS: dict = {'Authorization': f"Bearer {CODA_API_TOKEN}"}
+    CODA_API_TOKEN: str = os.environ['CODA_API_TOKEN']
+    CODA_DOC_ID: str = os.environ['CODA_DOC_ID']
     SLACK_BOT_TOKEN: str = os.environ['SLACK_BOT_TOKEN']
 
 @lru_cache()
