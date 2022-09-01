@@ -66,7 +66,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Define argument parser for the "add" subcommand 
     subparser_aliases['add'] = ["a"]
     parser_time_add = subparsers_time.add_parser("add",aliases=subparser_aliases["add"],help="Add a timesheet entry.")
-    parser_time_add.add_argument('time', type=float, help='Time in weeks')
+    parser_time_add.add_argument('duration', type=float, help='Time in days')
     parser_time_add.add_argument('comment', type=str, help='Entry description (use quotes)')
     
     # Define argument parser for the "report" subcommand 
@@ -93,15 +93,42 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Run the command if parsing was successful
     if parser_time.success:
 
-        # ======= COMMAND LOGIC STARTS HERE ======= 
         if args.selected_subcommand == 'add' or args.selected_subcommand in subparser_aliases['add']:        
-            slack_text.append(f"ADDING ENTRY WITH: {args}")
+
+            # ======= 'add' LOGIC STARTS HERE ======= 
+            slack_channel_id = payload['channel_id']
+            slack_user_id = payload['user_id']
+            try:
+                # Take the Slack Channel and User IDs from the payload and convert them
+                #    into a Coda project and user
+                coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
+                coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
+
+                # Formulate the data for the row to add
+                data = {}
+                data['Developer'] = coda_user['Name']
+                data['Project'] = coda_project['Project ID']
+                data['Duration'] = args.duration
+                data['Comment'] = args.comment
+
+                # Add row to timesheet
+                coda.put_rows('timesheet',[data])
+
+            except Exception as e:
+                slack_text.append(f"ERROR: {e}")
+
+            else:
+                slack_text.append(f"{args.duration} days added to database.")
+            # ======= 'add' LOGIC STOPS HERE ======= 
+
         elif args.selected_subcommand == 'report' or args.selected_subcommand in subparser_aliases['report']:        
+
+            # ======= 'report' LOGIC STARTS HERE ======= 
             slack_text.append(f"REPORTING WITH: {args}")
+            # ======= 'report' LOGIC STOPS HERE ======= 
+
         else:
             slack_text.append(f"ERROR: subcommand '{args.selected_subcommand}' not implemented.\n")
-
-        # ======= COMMAND LOGIC STOPS HERE ======= 
 
     # Report back to user
     if not slack_text.untouched :

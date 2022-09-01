@@ -17,7 +17,8 @@ class CodaClient(object):
     	# Fetch the metadata for the tables that we will need
     	table_aliases = {
     	    'People':            'people',
-    	    'Slack Users':       'slack',
+    	    'Slack Users':       'slack_users',
+    	    'Slack Channels':    'slack_channels',
     	    'Projects':          'projects',
     	    'Timesheet Entries': 'timesheet',
     	}
