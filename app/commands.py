@@ -6,6 +6,7 @@ import argparse
 import app.slack
 import app.coda
 import app.config
+import app.error
 
 log = getLogger(__name__)
 
@@ -19,7 +20,7 @@ class InvalidCommand(Exception):
 # all the text normally written to stdout or stderr (accumulateing it for
 # later reporting to the user), and stops any calls to sys.exit
 
-class MyParser(argparse.ArgumentParser):
+class Parser(argparse.ArgumentParser):
 
     def __init__(self, *args, **kwargs):
 
@@ -29,7 +30,7 @@ class MyParser(argparse.ArgumentParser):
         if 'slack_text' in kwargs.keys():
             self.slack_text = kwargs.pop('slack_text')
 
-        super(MyParser,self).__init__(*args, **kwargs)
+        super(Parser,self).__init__(*args, **kwargs)
 
     def exit(self, status=0, message=None):
 
@@ -57,26 +58,26 @@ class SlackText(object):
 @commands.on("time")
 async def handle_command(payload, slack = app.slack.get_client(app.config.get_settings()), coda = app.coda.get_client(app.config.get_settings())):
 
-    # Define argument parser for the "/time" command
-    parser_time = MyParser(description='Perform timesheet operations.')
-    parser_time.prog = payload['command']
-    subparsers_time = parser_time.add_subparsers(help='sub-command help', dest='selected_subcommand')
+    # Define argument parser for this command
+    parser = Parser(description='Perform timesheet operations.')
+    parser.prog = payload['command']
+    subparsers = parser.add_subparsers(help='sub-command help', dest='selected_subcommand')
     subparser_aliases = {}
    
     # Define argument parser for the "add" subcommand 
     subparser_aliases['add'] = ["a"]
-    parser_time_add = subparsers_time.add_parser("add",aliases=subparser_aliases["add"],help="Add a timesheet entry.")
-    parser_time_add.add_argument('duration', type=float, help='Time in days')
-    parser_time_add.add_argument('comment', type=str, help='Entry description (use quotes)')
+    parser_add = subparsers.add_parser("add",aliases=subparser_aliases["add"],help="Add a timesheet entry.")
+    parser_add.add_argument('duration', type=float, help='Time in days')
+    parser_add.add_argument('comment', type=str, help='Entry description (use quotes)')
     
     # Define argument parser for the "report" subcommand 
     subparser_aliases['report'] = ["r"]
-    parser_time_report = subparsers_time.add_parser("report",aliases=subparser_aliases['report'],help="Timesheet report.")
+    parser_report = subparsers.add_parser("report",aliases=subparser_aliases['report'],help="Timesheet report.")
 
     # Add the text accumulator to the parsers
     slack_text = SlackText()
-    for parser in [parser_time,parser_time_add,parser_time_report]:
-        parser.slack_text = slack_text
+    for parser_i in [parser,parser_add,parser_report]:
+        parser_i.slack_text = slack_text
 
     # Report the command that was submitted back to the user
     slack_text.append(f"\nYou ran: {payload['command']} {payload['text']}\n\n")
@@ -86,18 +87,19 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
     # Parse the command
     try:
-        args = parser_time.parse_args(shlex.split(command_text))
+        args = parser.parse_args(shlex.split(command_text))
     except InvalidCommand as e:
         slack_text.append(e.message)
 
     # Run the command if parsing was successful
-    if parser_time.success:
+    if parser.success:
+
+        slack_channel_id = payload['channel_id']
+        slack_user_id = payload['user_id']
 
         if args.selected_subcommand == 'add' or args.selected_subcommand in subparser_aliases['add']:        
 
             # ======= 'add' LOGIC STARTS HERE ======= 
-            slack_channel_id = payload['channel_id']
-            slack_user_id = payload['user_id']
             try:
                 # Take the Slack Channel and User IDs from the payload and convert them
                 #    into a Coda project and user
@@ -107,7 +109,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 # Formulate the data for the row to add
                 data = {}
                 data['Developer'] = coda_user['Name']
-                data['Project'] = coda_project['Project ID']
+                data['Project ID'] = coda_project['Project ID']
                 data['Duration'] = args.duration
                 data['Comment'] = args.comment
 
@@ -124,7 +126,16 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
         elif args.selected_subcommand == 'report' or args.selected_subcommand in subparser_aliases['report']:        
 
             # ======= 'report' LOGIC STARTS HERE ======= 
-            slack_text.append(f"REPORTING WITH: {args}")
+            try:
+                # Take the Slack Channel and User IDs from the payload and convert them
+                #    into a Coda project and user
+                coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
+            except Exception as e:
+                slack_text.append(f"ERROR: {e}")
+            else:
+                weeks_remaining=coda_project['Weeks Remaining']
+                total_weeks=coda_project['Total Weeks']
+                slack_text.append(f"{weeks_remaining} (of {total_weeks}) weeks remaining in this project.")
             # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
@@ -136,6 +147,4 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
     return
 
-@commands.on('error')
-def log_error(exc):
-    log.error(str(exc))
+

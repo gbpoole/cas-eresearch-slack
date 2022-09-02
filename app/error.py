@@ -1,4 +1,3 @@
-from fastapi import Depends
 from logging import getLogger
 from slackers.server import commands
 import app.config
