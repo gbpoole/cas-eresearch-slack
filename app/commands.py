@@ -147,4 +147,173 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
     return
 
+# Respond to the "/project" command
+@commands.on("project")
+async def handle_command(payload, slack = app.slack.get_client(app.config.get_settings()), coda = app.coda.get_client(app.config.get_settings())):
+
+    # Define argument parser for this command
+    parser = Parser(description='Perform project operations.')
+    parser.prog = payload['command']
+    subparsers = parser.add_subparsers(help='sub-command help', dest='selected_subcommand')
+    subparser_aliases = {}
+   
+    # Define argument parser for the "report" subcommand 
+    subparser_aliases['report'] = ["r"]
+    parser_report = subparsers.add_parser("report",aliases=subparser_aliases['report'],help="Project report.")
+
+    # Add the text accumulator to the parsers
+    slack_text = SlackText()
+    for parser_i in [parser,parser_report]:
+        parser_i.slack_text = slack_text
+
+    # Report the command that was submitted back to the user
+    slack_text.append(f"\nYou ran: {payload['command']} {payload['text']}\n\n")
+
+    # Remove inverted quotes which Slack inserts; makes string splitting tricky otherwise
+    command_text = payload['text'].replace('“','"').replace('”','"')
+
+    # Parse the command
+    try:
+        args = parser.parse_args(shlex.split(command_text))
+    except InvalidCommand as e:
+        slack_text.append(e.message)
+
+    # Run the command if parsing was successful
+    if parser.success:
+
+        slack_channel_id = payload['channel_id']
+        slack_user_id = payload['user_id']
+
+        if args.selected_subcommand == 'report' or args.selected_subcommand in subparser_aliases['report']:        
+
+            # ======= 'report' LOGIC STARTS HERE ======= 
+            try:
+                # Take the Slack Channel and User IDs from the payload and convert them
+                #    into a Coda project and user
+                coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
+                coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
+            except Exception as e:
+                slack_text.append(f"ERROR: {e}")
+            else:
+                slack_text.append(f"Project ID:    {coda_project['Project ID']}\n\n")
+                slack_text.append(f"Project Title: {coda_project['Project Title']}\n\n")
+
+                if len(coda_project['Sci Team Lead'])>0:
+                    slack_text.append(f"Sci Team Lead:     {coda_project['Sci Team Lead']}\n")
+                else:
+                    slack_text.append(f"Sci Team Lead:     None\n")
+                #if len(coda_project['Sci Team Member'])>0:
+                #    slack_text.append(f"Sci Team Members: {coda_project['Sci Team Member']}\n")
+                #else:
+                #    slack_text.append(f"Sci Team Members: None\n")
+
+                slack_text.append(f"\n")
+                if len(coda_project['Dev Team Lead'])>0:
+                    slack_text.append(f"Dev Team Lead:     {coda_project['Dev Team Lead']}\n")
+                else:
+                    slack_text.append(f"Dev Team Lead:     None\n")
+                if len(coda_project['Dev Team Members'])>0:
+                    slack_text.append(f"Dev Team Members:  {coda_project['Dev Team Members']}\n")
+                else:
+                    slack_text.append(f"Dev Team Members:  None\n")
+
+                slack_text.append(f"\n")
+                slack_text.append(f"Weeks allocated:  {coda_project['Total Weeks']}\n")
+                slack_text.append(f"Weeks spent:      {coda_project['Weeks Spent']}\n")
+                slack_text.append(f"Weeks remaining:  {coda_project['Weeks Remaining']}\n")
+
+                #slack_text.append(f"\n")
+                #if len(coda_project['Actions'].split(','))>0:
+                #    slack_text.append(f"Actions:\n")
+                #    for i_action,action in enumerate(coda_project['Actions'].split(',')):
+                #        slack_text.append(f"  {i_action}) {action}\n")
+
+                slack_text.append(f"\n")
+                if len(coda_project['Milestones'].split(','))>0:
+                    slack_text.append(f"Milestones:\n")
+                    for i_milestone,milestone in enumerate(coda_project['Milestones'].split(',')):
+                        slack_text.append(f"  {i_milestone}) {milestone}\n")
+            # ======= 'report' LOGIC STOPS HERE ======= 
+
+        else:
+            slack_text.append(f"ERROR: subcommand '{args.selected_subcommand}' not implemented.\n")
+
+    # Report back to user
+    if not slack_text.untouched :
+        slack.message(payload, slack_text.text, code=True)
+
+    return
+
+# Respond to the "/user" command
+@commands.on("user")
+async def handle_command(payload, slack = app.slack.get_client(app.config.get_settings()), coda = app.coda.get_client(app.config.get_settings())):
+
+    # Define argument parser for this command
+    parser = Parser(description='Perform project operations.')
+    parser.prog = payload['command']
+    subparsers = parser.add_subparsers(help='sub-command help', dest='selected_subcommand')
+    subparser_aliases = {}
+   
+    # Define argument parser for the "info" subcommand 
+    subparser_aliases['info'] = ["i"]
+    parser_info = subparsers.add_parser("info",aliases=subparser_aliases['info'],help="Info about user.")
+
+    # Add the text accumulator to the parsers
+    slack_text = SlackText()
+    for parser_i in [parser,parser_info]:
+        parser_i.slack_text = slack_text
+
+    # Report the command that was submitted back to the user
+    slack_text.append(f"\nYou ran: {payload['command']} {payload['text']}\n\n")
+
+    # Remove inverted quotes which Slack inserts; makes string splitting tricky otherwise
+    command_text = payload['text'].replace('“','"').replace('”','"')
+
+    # Parse the command
+    try:
+        args = parser.parse_args(shlex.split(command_text))
+    except InvalidCommand as e:
+        slack_text.append(e.message)
+
+    # Run the command if parsing was successful
+    if parser.success:
+
+        slack_channel_id = payload['channel_id']
+        slack_user_id = payload['user_id']
+
+        if args.selected_subcommand == 'info' or args.selected_subcommand in subparser_aliases['info']:        
+
+            # ======= 'info' LOGIC STARTS HERE ======= 
+            try:
+                # Take the Slack Channel and User IDs from the payload and convert them
+                #    into a Coda project and user
+                coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
+            except Exception as e:
+                slack_text.append(f"ERROR: {e}")
+            else:
+                slack_text.append(f"User Name: {coda_user['Name']}\n\n")
+                if len(coda_user['Dev Team Lead'])>0:
+                    slack_text.append(f"Dev Team Lead of:   {coda_user['Dev Team Lead']}\n")
+                if len(coda_user['Dev Team Member'])>0:
+                    slack_text.append(f"Dev Team Member of: {coda_user['Dev Team Member']}\n")
+                if len(coda_user['Sci Team Lead'])>0:
+                    slack_text.append(f"Sci Team Lead of:   {coda_user['Sci Team Lead']}\n")
+                if len(coda_user['Sci Team Member'])>0:
+                    slack_text.append(f"Sci Team Member of: {coda_user['Sci Team Member']}\n")
+
+                slack_text.append(f"\n")
+                if len(coda_user['Actions'].split(','))>0:
+                    slack_text.append(f"Actions:\n")
+                    for i_action,action in enumerate(coda_user['Actions'].split(',')):
+                        slack_text.append(f"  {i_action}) {action}\n")
+            # ======= 'info' LOGIC STOPS HERE ======= 
+
+        else:
+            slack_text.append(f"ERROR: subcommand '{args.selected_subcommand}' not implemented.\n")
+
+    # Report back to user
+    if not slack_text.untouched :
+        slack.message(payload, slack_text.text, code=True)
+
+    return
 
