@@ -1,6 +1,10 @@
 from fastapi import Depends
 from slackers.server import commands
 from logging import getLogger
+from fractions import Fraction
+import numpy as np
+import datetime as dt
+import pytz
 import shlex
 import argparse
 import app.slack
@@ -130,12 +134,36 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 # Take the Slack Channel and User IDs from the payload and convert them
                 #    into a Coda project and user
                 coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
+                project_id = coda_project['Project ID']
+                coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
+                dev_name = coda_user['Name']
+                coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
+                timezone = pytz.timezone('Australia/Melbourne')
+                last_entry_date = None
+                current_time = dt.datetime.now(tz=timezone)
+                for entry in coda_timesheet_project:
+                    print(entry)
+                    if entry['Developer']==dev_name:
+                        entry_date = dt.datetime.fromisoformat(entry['Entry Date']).astimezone(tz=timezone)
+                        print(f"    {entry_date}{last_entry_date}\n")
+                        if not last_entry_date:
+                            last_entry_date = entry_date
+                        else:
+                            if entry_date > last_entry_date:
+                                last_entry_date = entry_date
             except Exception as e:
                 slack_text.append(f"ERROR: {e}")
             else:
-                weeks_remaining=coda_project['Weeks Remaining']
-                total_weeks=coda_project['Total Weeks']
-                slack_text.append(f"{weeks_remaining} (of {total_weeks}) weeks remaining in this project.")
+                weeks_allocated = coda_project['Total Weeks']
+                weeks_spent = Fraction(coda_project['Days Spent'],5)
+                weeks_remaining = weeks_allocated - weeks_spent
+                slack_text.append(f"{float(weeks_remaining)} (of {float(weeks_allocated)}) weeks remaining in this project.\n")
+                if not last_entry_date:
+                    slack_text.append(f"You do not yet have any timesheet entries against this project.")
+                else:
+                    last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
+                    num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
+                    slack_text.append(f"Your last timesheet entry for this project was: {last_entry_date_fmt} ({num_business_days} business days ago).")
             # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
@@ -217,10 +245,14 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 else:
                     slack_text.append(f"Dev Team Members:  None\n")
 
+                weeks_allocated = coda_project['Total Weeks']
+                weeks_spent = Fraction(coda_project['Days Spent'],5)
+                weeks_remaining = weeks_allocated - weeks_spent
+
                 slack_text.append(f"\n")
-                slack_text.append(f"Weeks allocated:  {coda_project['Total Weeks']}\n")
-                slack_text.append(f"Weeks spent:      {coda_project['Weeks Spent']}\n")
-                slack_text.append(f"Weeks remaining:  {coda_project['Weeks Remaining']}\n")
+                slack_text.append(f"Weeks allocated:  {weeks_allocated}\n")
+                slack_text.append(f"Weeks spent:      {float(weeks_spent)}\n")
+                slack_text.append(f"Weeks remaining:  {float(weeks_remaining)}\n")
 
                 #slack_text.append(f"\n")
                 #if len(coda_project['Actions'].split(','))>0:
