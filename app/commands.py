@@ -2,6 +2,7 @@ from fastapi import Depends
 from slackers.server import commands
 from logging import getLogger
 from fractions import Fraction
+import textwrap
 import numpy as np
 import datetime as dt
 import pytz
@@ -137,33 +138,48 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 project_id = coda_project['Project ID']
                 coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
                 dev_name = coda_user['Name']
+
+                # Fetch timesheet entries for this project
                 coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
+
+                # Set the current time and timezone
                 timezone = pytz.timezone('Australia/Melbourne')
-                last_entry_date = None
                 current_time = dt.datetime.now(tz=timezone)
-                for entry in coda_timesheet_project:
-                    print(entry)
-                    if entry['Developer']==dev_name:
-                        entry_date = dt.datetime.fromisoformat(entry['Entry Date']).astimezone(tz=timezone)
-                        print(f"    {entry_date}{last_entry_date}\n")
-                        if not last_entry_date:
-                            last_entry_date = entry_date
-                        else:
-                            if entry_date > last_entry_date:
-                                last_entry_date = entry_date
+
+                # Select list items for this user
+                user_entries = [entry for entry in coda_timesheet_project where entry['Developer']==dev_name]
+
+                # Add datetime objects for sorting
+                for entry in user_entries:
+                    entry['datetime'] = dt.datetime.fromisoformat(entry['Entry Date']).astimezone(tz=timezone)
+
             except Exception as e:
                 slack_text.append(f"ERROR: {e}")
             else:
-                weeks_allocated = coda_project['Total Weeks']
-                weeks_spent = Fraction(coda_project['Days Spent'],5)
-                weeks_remaining = weeks_allocated - weeks_spent
-                slack_text.append(f"{float(weeks_remaining)} (of {float(weeks_allocated)}) weeks remaining in this project.\n")
-                if not last_entry_date:
-                    slack_text.append(f"You do not yet have any timesheet entries against this project.")
-                else:
+
+                if user_entries:
+
+                    # Print the user's timesheet entries
+                    comment_length = 30
+                    slack_text.append(f"Your timesheet entries for this project:")
+                    for entry in sorted(user_entries,key='datetime'):
+                        entry_date_fmt = entry['datetime'].strftime("%d/%m/%y")
+                        slack_text.append(f"{entry_date_fmt}: {textwrap.shorten(entry['Comment'], width=comment_length, placeholder="...")}\n")
+
+                    # Report the number of business days since the last entry
+                    last_entry_date = user_entries[-1]
                     last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
                     num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
                     slack_text.append(f"Your last timesheet entry for this project was: {last_entry_date_fmt} ({num_business_days} business days ago).")
+
+                else:
+                    slack_text.append(f"You do not yet have any timesheet entries against this project.")
+
+                # Report resource statistics
+                weeks_allocated = coda_project['Total Weeks']
+                weeks_spent = Fraction(coda_project['Days Spent'],5)
+                weeks_remaining = weeks_allocated - weeks_spent
+                slack_text.append(f"\n\n{float(weeks_remaining)} (of {float(weeks_allocated)}) weeks remaining in this project.")
             # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
