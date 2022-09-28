@@ -1,7 +1,6 @@
 from fastapi import Depends
 from slackers.server import commands
 from logging import getLogger
-from fractions import Fraction
 import textwrap
 import numpy as np
 import datetime as dt
@@ -30,7 +29,6 @@ class Parser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
 
         # Add the following members to support our bespoke reporting
-        self.success = True
         self.slack_text = None
         if 'slack_text' in kwargs.keys():
             self.slack_text = kwargs.pop('slack_text')
@@ -39,11 +37,10 @@ class Parser(argparse.ArgumentParser):
 
     def exit(self, status=0, message=None):
 
-        self.success = False
+        raise InvalidCommand(f'{message}')
 
     def error(self, message):
 
-        self.success = False
         raise InvalidCommand(f'{message}')
 
     def _print_message(self, message, file=None):
@@ -56,8 +53,9 @@ class SlackText(object):
     untouched = True
 
     def append(self,text: str):
-        self.text+=text
-        self.untouched=False
+        if text:
+            self.text+=text
+            self.untouched=False
 
 # Respond to the "/time" command
 @commands.on("time")
@@ -93,11 +91,15 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Parse the command
     try:
         args = parser.parse_args(shlex.split(command_text))
-    except InvalidCommand as e:
-        slack_text.append(e.message)
+    except (argparse.ArgumentError, InvalidCommand) as e:
+        if e.message != 'None':
+            slack_text.append(e.message)
+    except Exception as e:
+        slack_text.append(f"ERROR: {e}")
 
     # Run the command if parsing was successful
-    if parser.success:
+    else:
+        print("test6")
 
         slack_channel_id = payload['channel_id']
         slack_user_id = payload['user_id']
@@ -125,7 +127,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 slack_text.append(f"ERROR: {e}")
 
             else:
-                slack_text.append(f"{args.duration} days added to database.")
+                slack_text.append(f"{args.duration} days added to project {coda_project['Project ID']}.")
             # ======= 'add' LOGIC STOPS HERE ======= 
 
         elif args.selected_subcommand == 'report' or args.selected_subcommand in subparser_aliases['report']:        
@@ -147,7 +149,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 current_time = dt.datetime.now(tz=timezone)
 
                 # Select list items for this user
-                user_entries = [entry for entry in coda_timesheet_project where entry['Developer']==dev_name]
+                user_entries = [entry for entry in coda_timesheet_project if entry['Developer']==dev_name]
 
                 # Add datetime objects for sorting
                 for entry in user_entries:
@@ -159,27 +161,30 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
                 if user_entries:
 
+                    slack_text.append(f"Project: {coda_project['Project ID']}\n\n")
+
                     # Print the user's timesheet entries
-                    comment_length = 30
-                    slack_text.append(f"Your timesheet entries for this project:")
-                    for entry in sorted(user_entries,key='datetime'):
+                    comment_length = 80
+                    slack_text.append(f"Your timesheet entries for this project:\n\n")
+                    for entry in sorted(user_entries,key=lambda d: d['datetime']):
                         entry_date_fmt = entry['datetime'].strftime("%d/%m/%y")
-                        slack_text.append(f"{entry_date_fmt}: {textwrap.shorten(entry['Comment'], width=comment_length, placeholder="...")}\n")
+                        slack_text.append(f"  {entry_date_fmt}: {textwrap.shorten(entry['Comment'], width=comment_length, placeholder='...')} [{entry['Duration']}]\n")
 
                     # Report the number of business days since the last entry
-                    last_entry_date = user_entries[-1]
+                    last_entry = user_entries[0]
+                    last_entry_date = last_entry['datetime']
                     last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
                     num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
-                    slack_text.append(f"Your last timesheet entry for this project was: {last_entry_date_fmt} ({num_business_days} business days ago).")
+                    slack_text.append(f"\nYour last timesheet entry for this project was: {last_entry_date_fmt} (~{num_business_days} business days ago).")
 
                 else:
                     slack_text.append(f"You do not yet have any timesheet entries against this project.")
 
                 # Report resource statistics
                 weeks_allocated = coda_project['Total Weeks']
-                weeks_spent = Fraction(coda_project['Days Spent'],5)
+                weeks_spent = coda_project['Days Spent']/5
                 weeks_remaining = weeks_allocated - weeks_spent
-                slack_text.append(f"\n\n{float(weeks_remaining)} (of {float(weeks_allocated)}) weeks remaining in this project.")
+                slack_text.append(f"\n\n{weeks_remaining:.1f} (of {weeks_allocated:.1f}) weeks remaining.")
             # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
@@ -219,11 +224,14 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Parse the command
     try:
         args = parser.parse_args(shlex.split(command_text))
-    except InvalidCommand as e:
-        slack_text.append(e.message)
+    except (argparse.ArgumentError, InvalidCommand) as e:
+        if e.message != 'None':
+            slack_text.append(e.message)
+    except Exception as e:
+        slack_text.append(f"ERROR: {e}")
 
     # Run the command if parsing was successful
-    if parser.success:
+    else:
 
         slack_channel_id = payload['channel_id']
         slack_user_id = payload['user_id']
@@ -262,13 +270,13 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                     slack_text.append(f"Dev Team Members:  None\n")
 
                 weeks_allocated = coda_project['Total Weeks']
-                weeks_spent = Fraction(coda_project['Days Spent'],5)
+                weeks_spent = coda_project['Days Spent']/5
                 weeks_remaining = weeks_allocated - weeks_spent
 
                 slack_text.append(f"\n")
-                slack_text.append(f"Weeks allocated:  {weeks_allocated}\n")
-                slack_text.append(f"Weeks spent:      {float(weeks_spent)}\n")
-                slack_text.append(f"Weeks remaining:  {float(weeks_remaining)}\n")
+                slack_text.append(f"Weeks allocated:  {weeks_allocated:.1f}\n")
+                slack_text.append(f"Weeks spent:      {weeks_spent:.1f}\n")
+                slack_text.append(f"Weeks remaining:  {weeks_remaining:.1f}\n")
 
                 #slack_text.append(f"\n")
                 #if len(coda_project['Actions'].split(','))>0:
@@ -276,8 +284,8 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 #    for i_action,action in enumerate(coda_project['Actions'].split(',')):
                 #        slack_text.append(f"  {i_action}) {action}\n")
 
-                slack_text.append(f"\n")
-                if len(coda_project['Milestones'].split(','))>0:
+                if coda_project['Milestones'] and len(coda_project['Milestones'].split(','))>0:
+                    slack_text.append(f"\n")
                     slack_text.append(f"Milestones:\n")
                     for i_milestone,milestone in enumerate(coda_project['Milestones'].split(',')):
                         slack_text.append(f"  {i_milestone}) {milestone}\n")
@@ -320,11 +328,14 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Parse the command
     try:
         args = parser.parse_args(shlex.split(command_text))
-    except InvalidCommand as e:
-        slack_text.append(e.message)
+    except (argparse.ArgumentError, InvalidCommand) as e:
+        if e.message != 'None':
+            slack_text.append(e.message)
+    except Exception as e:
+        slack_text.append(f"ERROR: {e}")
 
     # Run the command if parsing was successful
-    if parser.success:
+    else:
 
         slack_channel_id = payload['channel_id']
         slack_user_id = payload['user_id']
