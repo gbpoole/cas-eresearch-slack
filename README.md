@@ -104,10 +104,47 @@ python3 -m venv myenv
 pip3 install certbot certbot-nginx
 sudo myenv/bin/certbot --nginx -d cas-eresearch-slack.adacs-gpoole.cloud.edu.au
 
+For a 1-time renewal: sudo certbot renew
+
+### Auto-renewal of SSL
+
+Edit the following 2 files (`sudo vi`):
+
+`/etc/systemd/system/certbot.service`
+```
+[Unit]
+Description=Let's Encrypt renewal
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --quiet --agree-tos
+ExecStartPost=/bin/systemctl reload apache2.service
+```
+
+`/etc/systemd/system/certbot.timer`
+```
+[Unit]
+Description=Twice daily renewal of Let's Encrypt's certificates
+
+[Timer]
+OnCalendar=0/12:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable and start certbot.timer
+```
+systemctl enable --now certbot.timer
+```
+
 ### Run the app
 
 * Install Poetry.  Add to path: export PATH="/home/ubuntu/.local/bin:$PATH"
 * Create a venv (if not done already): ./scripts/create_venv.sh
 * Source venv: source venv/bin/activate
 * Install the app with: poetry install
-* Use docker-compose to start the app (from the repo directory): sudo docker-compose up -d
+* To use docker-compose to start the app (from the repo directory): sudo docker-compose up -d
+* Otherwise: gunicorn app.main:app -c gunicorn.nectar.conf.py
