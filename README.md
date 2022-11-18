@@ -140,6 +140,8 @@ Enable and start certbot.timer
 systemctl enable --now certbot.timer
 ```
 
+To check the status of the timer: `sudo systemctl status certbot.timer`
+
 ### Run the app
 
 * Install Poetry.  Add to path: export PATH="/home/ubuntu/.local/bin:$PATH"
