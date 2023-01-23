@@ -28,7 +28,7 @@ class CodaClient(object):
     	    if table.name in table_aliases.keys():
     	        self.tables[table_aliases[table.name]]=table
 
-    def get_rows(self, table_alias, query):
+    def get_rows(self, table_alias, query=None):
 
         results = []
         for row in self.client.list_rows(self.doc.id, self.tables[table_alias].id, use_column_names=True, query=query)['items']:

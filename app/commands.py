@@ -76,6 +76,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     # Define argument parser for the "report" subcommand 
     subparser_aliases['report'] = ["r"]
     parser_report = subparsers.add_parser("report",aliases=subparser_aliases['report'],help="Timesheet report.")
+    parser_report.add_argument('-a', '--all', action='store_true', help='Generate a report across all projects.')
 
     # Add the text accumulator to the parsers
     slack_text = SlackText()
@@ -99,7 +100,6 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
     # Run the command if parsing was successful
     else:
-        print("test6")
 
         slack_channel_id = payload['channel_id']
         slack_user_id = payload['user_id']
@@ -134,15 +134,17 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
             # ======= 'report' LOGIC STARTS HERE ======= 
             try:
-                # Take the Slack Channel and User IDs from the payload and convert them
-                #    into a Coda project and user
+                # Take the Slack Channel and User IDs from the payload and convert them into a Coda project and user
                 coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
                 project_id = coda_project['Project ID']
                 coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
                 dev_name = coda_user['Name']
 
                 # Fetch timesheet entries for this project
-                coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
+                if args.all:
+                    coda_timesheet_project = coda.get_rows('timesheet')
+                else:
+                    coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
 
                 # Set the current time and timezone
                 timezone = pytz.timezone('Australia/Melbourne')
@@ -161,30 +163,55 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
                 if user_entries:
 
-                    slack_text.append(f"Project: {coda_project['Project ID']}\n\n")
-
-                    # Print the user's timesheet entries
+                    # Print the user's timesheet entries (sort by Project first - needed if args.all - and then time)
                     comment_length = 80
-                    slack_text.append(f"Your timesheet entries for this project:\n\n")
-                    for entry in sorted(user_entries,key=lambda d: d['datetime']):
+                    last_entry = None
+                    for i_entry,entry in enumerate(sorted(user_entries,key=lambda d: (d['Project ID'], d['datetime']))):
+
+                        if i_entry != 0:
+                            if entry['Project ID']!=last_entry['Project ID']:
+                                # Print anything you want to be shown AFTER a project's entries here
+                                # Report the number of business days since the last entry
+                                last_entry_date = last_entry['datetime']
+                                last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
+                                num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
+                                slack_text.append(f"\n  Last entry:      ~{num_business_days} business days ago.\n")
+
+                                # Report resource statistics
+                                weeks_allocated = coda_project['Total Weeks']
+                                weeks_spent = coda_project['Days Spent']/5
+                                weeks_remaining = weeks_allocated - weeks_spent
+                                slack_text.append(f"  Weeks remaining: {weeks_remaining:.1f} (of {weeks_allocated:.1f})\n")
+                                slack_text.append(f"\n")
+
+                        if i_entry == 0 or entry['Project ID']!=last_entry['Project ID']:
+                            # Print anything you want to be shown BEFORE a project's entries here
+                            slack_text.append(f"Your timesheet report for {entry['Project ID']}:\n\n")
+
                         entry_date_fmt = entry['datetime'].strftime("%d/%m/%y")
                         slack_text.append(f"  {entry_date_fmt}: {textwrap.shorten(entry['Comment'], width=comment_length, placeholder='...')} [{entry['Duration']}]\n")
 
+                        # Hold onto this entry for comparisons to the next one
+                        last_entry = entry
+
                     # Report the number of business days since the last entry
-                    last_entry = user_entries[0]
                     last_entry_date = last_entry['datetime']
                     last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
                     num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
-                    slack_text.append(f"\nYour last timesheet entry for this project was: {last_entry_date_fmt} (~{num_business_days} business days ago).")
+                    slack_text.append(f"\n  Last entry:      ~{num_business_days} business days ago.\n")
+
+                    # Report resource statistics
+                    weeks_allocated = coda_project['Total Weeks']
+                    weeks_spent = coda_project['Days Spent']/5
+                    weeks_remaining = weeks_allocated - weeks_spent
+                    slack_text.append(f"  Weeks remaining: {weeks_remaining:.1f} (of {weeks_allocated:.1f})\n")
 
                 else:
-                    slack_text.append(f"You do not yet have any timesheet entries against this project.")
+                    if args.all:
+                        slack_text.append(f"You do not yet have any timesheet entries against this (or any other) project.")
+                    else:
+                        slack_text.append(f"You do not yet have any timesheet entries against this project.")
 
-                # Report resource statistics
-                weeks_allocated = coda_project['Total Weeks']
-                weeks_spent = coda_project['Days Spent']/5
-                weeks_remaining = weeks_allocated - weeks_spent
-                slack_text.append(f"\n\n{weeks_remaining:.1f} (of {weeks_allocated:.1f}) weeks remaining.")
             # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
