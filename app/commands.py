@@ -1,6 +1,7 @@
 from fastapi import Depends
 from slackers.server import commands
 from logging import getLogger
+import math
 import textwrap
 import numpy as np
 import datetime as dt
@@ -134,24 +135,22 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
             # ======= 'report' LOGIC STARTS HERE ======= 
             try:
-                # Take the Slack Channel and User IDs from the payload and convert them into a Coda project and user
-                coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
-                project_id = coda_project['Project ID']
+                # Take the Slack User ID from the payload and convert it into a Coda user
                 coda_user = coda.get_rows('people',f'"Slack ID":"{slack_user_id}"')[0]
                 dev_name = coda_user['Name']
-
-                # Fetch timesheet entries for this project
-                if args.all:
-                    coda_timesheet_project = coda.get_rows('timesheet')
-                else:
-                    coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
 
                 # Set the current time and timezone
                 timezone = pytz.timezone('Australia/Melbourne')
                 current_time = dt.datetime.now(tz=timezone)
 
-                # Select list items for this user
-                user_entries = [entry for entry in coda_timesheet_project if entry['Developer']==dev_name]
+                # Fetch/filter timesheet entries
+                if args.all:
+                    user_entries = coda.get_rows('timesheet',f'"Developer":"{dev_name}"')
+                else:
+                    coda_project = coda.get_rows('projects',f'"Slack Channel ID":"{slack_channel_id}"')[0]
+                    project_id = coda_project['Project ID']
+                    coda_timesheet_project = coda.get_rows('timesheet',f'"Project ID":"{project_id}"')
+                    user_entries = [entry for entry in coda_timesheet_project if entry['Developer']==dev_name]
 
                 # Add datetime objects for sorting
                 for entry in user_entries:
@@ -170,7 +169,9 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
                         if i_entry != 0:
                             if entry['Project ID']!=last_entry['Project ID']:
-                                # Print anything you want to be shown AFTER a project's entries here
+
+                                # LOGIC FOR THE FINISHING A PROJECT HERE
+
                                 # Report the number of business days since the last entry
                                 last_entry_date = last_entry['datetime']
                                 last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
@@ -185,6 +186,12 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                                 slack_text.append(f"\n")
 
                         if i_entry == 0 or entry['Project ID']!=last_entry['Project ID']:
+                            # LOGIC FOR THE STARTING A NEW PROJECT HERE
+
+                            # Fetch project from the Coda table
+                            entry_project_id = entry['Project ID']
+                            coda_project = coda.get_rows('projects',f'"Project ID":"{entry_project_id}"')[0]
+
                             # Print anything you want to be shown BEFORE a project's entries here
                             slack_text.append(f"Your timesheet report for {entry['Project ID']}:\n\n")
 
@@ -193,6 +200,8 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
 
                         # Hold onto this entry for comparisons to the next one
                         last_entry = entry
+
+                    # LOGIC FOR THE FINISHING A PROJECT HERE
 
                     # Report the number of business days since the last entry
                     last_entry_date = last_entry['datetime']
@@ -210,7 +219,13 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                     if args.all:
                         slack_text.append(f"You do not yet have any timesheet entries against this (or any other) project.")
                     else:
-                        slack_text.append(f"You do not yet have any timesheet entries against this project.")
+                        slack_text.append(f"You do not yet have any timesheet entries against this project.\n\n")
+
+                        # Report resource statistics
+                        weeks_allocated = coda_project['Total Weeks']
+                        weeks_spent = coda_project['Days Spent']/5
+                        weeks_remaining = weeks_allocated - weeks_spent
+                        slack_text.append(f"Weeks remaining: {weeks_remaining:.1f} (of {weeks_allocated:.1f})\n")
 
             # ======= 'report' LOGIC STOPS HERE ======= 
 
@@ -311,6 +326,7 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                 #    for i_action,action in enumerate(coda_project['Actions'].split(',')):
                 #        slack_text.append(f"  {i_action}) {action}\n")
 
+                # Milestones are (annoyingly) returned as a single string concatinated with commas
                 if coda_project['Milestones'] and len(coda_project['Milestones'].split(','))>0:
                     slack_text.append(f"\n")
                     slack_text.append(f"Milestones:\n")
@@ -337,13 +353,13 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
     subparsers = parser.add_subparsers(help='sub-command help', dest='selected_subcommand')
     subparser_aliases = {}
    
-    # Define argument parser for the "info" subcommand 
-    subparser_aliases['info'] = ["i"]
-    parser_info = subparsers.add_parser("info",aliases=subparser_aliases['info'],help="Info about user.")
+    # Define argument parser for the "report" subcommand 
+    subparser_aliases['report'] = ["i"]
+    parser_report = subparsers.add_parser("report",aliases=subparser_aliases['report'],help="Info about user.")
 
     # Add the text accumulator to the parsers
     slack_text = SlackText()
-    for parser_i in [parser,parser_info]:
+    for parser_i in [parser,parser_report]:
         parser_i.slack_text = slack_text
 
     # Report the command that was submitted back to the user
@@ -367,9 +383,9 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
         slack_channel_id = payload['channel_id']
         slack_user_id = payload['user_id']
 
-        if args.selected_subcommand == 'info' or args.selected_subcommand in subparser_aliases['info']:        
+        if args.selected_subcommand == 'report' or args.selected_subcommand in subparser_aliases['report']:        
 
-            # ======= 'info' LOGIC STARTS HERE ======= 
+            # ======= 'report' LOGIC STARTS HERE ======= 
             try:
                 # Take the Slack Channel and User IDs from the payload and convert them
                 #    into a Coda project and user
@@ -386,19 +402,47 @@ async def handle_command(payload, slack = app.slack.get_client(app.config.get_se
                     slack_text.append(f"Sci Team Lead of:   {coda_user['Sci Team Lead']}\n")
                 if len(coda_user['Sci Team Member'])>0:
                     slack_text.append(f"Sci Team Member of: {coda_user['Sci Team Member']}\n")
-
                 slack_text.append(f"\n")
-                if len(coda_user['Actions'].split(','))>0:
-                    slack_text.append(f"Actions:\n")
-                    for i_action,action in enumerate(coda_user['Actions'].split(',')):
-                        slack_text.append(f"  {i_action}) {action}\n")
-            # ======= 'info' LOGIC STOPS HERE ======= 
+
+                #if len(coda_user['Actions'].split(','))>0:
+                #    slack_text.append(f"Actions:\n")
+                #    for i_action,action in enumerate(coda_user['Actions'].split(',')):
+                #        slack_text.append(f"  {i_action}) {action}\n")
+                #    slack_text.append(f"\n")
+
+                # Convert days logged to work weeks & days
+                print(coda_user)
+                total_days_logged = coda_user['Total Time [days]']
+                weeks_logged = math.floor(total_days_logged/5)
+                days_logged = total_days_logged - 5*weeks_logged
+                time_logged_str = "none"
+                if weeks_logged>0:
+                    time_logged_str = f"{weeks_logged} weeks"
+                if days_logged>0:
+                    if time_logged_str == "none":
+                        time_logged_str = f"{days_logged} days"
+                    else:
+                        time_logged_str = time_logged_str + f" and {days_logged:.1f} days"
+                print("Time logged:",time_logged_str)
+
+                # Calculate the number of business days since the last entry
+                timezone = pytz.timezone('Australia/Melbourne')
+                current_time = dt.datetime.now(tz=timezone)
+                last_entry_date = dt.datetime.fromisoformat(coda_user['Last Timesheet Entry']).astimezone(tz=timezone)
+                last_entry_date_fmt = last_entry_date.strftime("%d/%m/%y")
+                num_business_days = np.busday_count( last_entry_date.date(), current_time.date())
+                print("Time since last entry:",num_business_days)
+
+                # Report results
+                slack_text.append(f"Total time logged:     {time_logged_str}\n")
+                slack_text.append(f"Time since last entry: ~{num_business_days} business days ago.\n")
+            # ======= 'report' LOGIC STOPS HERE ======= 
 
         else:
             slack_text.append(f"ERROR: subcommand '{args.selected_subcommand}' not implemented.\n")
 
     # Report back to user
-    if not slack_text.untouched :
+    if not slack_text.untouched:
         slack.message(payload, slack_text.text, code=True)
 
     return
